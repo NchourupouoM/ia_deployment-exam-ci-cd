@@ -82,3 +82,34 @@ jobs:
           
           print('Fichiers poussés avec succès sur le Hub !')
           "
+          notify_on_success:
+    
+      - name: Send deployment success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # Paramètres du serveur
+          server_address: ${{ secrets.MAIL_SERVER_ADDRESS }}
+          server_port: ${{ secrets.MAIL_SERVER_PORT }}
+          
+          # Authentification
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+
+          # Contenu de l'email
+          subject: 'Succès du Déploiement : ${{ github.repository }}'
+          to: ${{ secrets.MAIL_USERNAME }} # Envoyer à soi-même ou à une liste
+          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}> # Nom de l'expéditeur
+          body: |
+            Bonjour,
+
+            Le déploiement du modèle sur le dépôt ${{ github.repository }} a réussi.
+            
+            Commit : ${{ github.sha }}
+            Auteur : ${{ github.actor }}
+            
+            Le modèle est maintenant disponible sur Hugging Face Hub :
+            https://huggingface.co/${{ github.repository }}
+
+            Cordialement,
+            Votre Pipeline CI/CD.
+
