@@ -1,0 +1,17 @@
+# Fichiers Python générés
+__pycache__/
+*.pyc
+*.pyo
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+.env
+
+# Fichiers de modèle (seront gérés par Git LFS, mais on les ignore par précaution)
+*.joblib
+
+# Fichiers IDE
+.idea/
+.vscode/
