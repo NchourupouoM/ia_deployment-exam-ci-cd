@@ -7,23 +7,27 @@ on:
     branches:
       - main
 
-# Variables d'environnement globales, accessibles à tous les jobs
+# Pas de variables d'environnement globales pour le repo_id pour éviter les conflits.
+# Nous les définirons au niveau du job ou de la step pour plus de clarté.
 env:
-  HF_MODEL_REPO: https://huggingface.co/NchourupouoM/ia-deployment-exam-ci-cd
   MODEL_FILENAME: model.joblib
   PYTHON_VERSION: '3.9'
 
 jobs:
-  # --- JOB 1: Entraînement et Déploiement ---
   deploy:
     name: Train and Deploy Model
     runs-on: ubuntu-latest
     
+    # Définition des variables d'environnement spécifiques à ce job
+    env:
+      # CORRECTION FINALE : On utilise la source de vérité garantie.
+      # github.repository contient TOUJOURS le format 'namespace/repo_name'.
+      HF_REPO_ID: ${{ github.repository }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          # Nécessaire pour que Git LFS fonctionne correctement s'il est utilisé
           fetch-depth: 0
 
       - name: Setup Python
@@ -41,15 +45,15 @@ jobs:
       
       - name: Push to Hugging Face Hub
         env:
-          # Le token est passé en variable d'environnement uniquement pour cette étape
+          # On passe le token secret uniquement à cette étape
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -c "
           from huggingface_hub import HfApi
           import os
 
-          # Le script peut maintenant lire correctement les variables
-          repo_id = os.getenv('HF_MODEL_REPO')
+          # Le script lit les variables d'environnement du job et de la step
+          repo_id = os.getenv('HF_REPO_ID')
           model_filename = os.getenv('MODEL_FILENAME')
           
           print(f'Déploiement sur le dépôt : {repo_id}')
@@ -57,6 +61,15 @@ jobs:
 
           api = HfApi()
 
+          print('Création (si besoin) du dépôt sur le Hub...')
+          api.create_repo(
+              repo_id=repo_id,
+              repo_type='model',
+              exist_ok=True
+          )
+          print('Dépôt prêt.')
+
+          print('Début du push des fichiers...')
           api.upload_file(
               path_or_fileobj=f'./{model_filename}',
               path_in_repo=model_filename,
@@ -73,6 +86,7 @@ jobs:
           
           print('Fichiers poussés avec succès sur le Hub !')
           "
+
   notify_on_success:
     name: Send Success Notification
     runs-on: ubuntu-latest
@@ -86,20 +100,19 @@ jobs:
           server_port: ${{ secrets.MAIL_SERVER_PORT }}
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-
-          subject: 'Succès du Déploiement : ${{ env.HF_MODEL_REPO }}'
+          subject: 'Succès du Déploiement : ${{ github.repository }}'
           to: ${{ secrets.MAIL_USERNAME }}
           from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
           body: |
             Bonjour,
 
-            Le déploiement du modèle sur le dépôt ${{ env.HF_MODEL_REPO }} a réussi.
+            Le déploiement du modèle sur le dépôt ${{ github.repository }} a réussi.
             
             Commit : ${{ github.sha }}
             Auteur : ${{ github.actor }}
             
-            Le modèle est maintenant disponible sur Hugging Face Hub :
-            https://huggingface.co/${{ env.HF_MODEL_REPO }}
+            Le modèle a été déployé avec succès et est disponible sur Hugging Face Hub :
+            https://huggingface.co/${{ github.repository }}
 
             Cordialement,
             Votre Pipeline CI/CD.
