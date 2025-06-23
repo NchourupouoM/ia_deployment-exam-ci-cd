@@ -1,55 +1,54 @@
+# .github/workflows/deploy-to-hf.yml
+
 name: Deploy to Hugging Face Hub
 
-# Déclencheur : se lance à chaque push sur la branche 'main'
 on:
   push:
     branches:
       - main
 
-# Variables d'environnement pour tout le job, pour la propreté
+# Variables d'environnement globales, accessibles à tous les jobs
 env:
-  HF_MODEL_REPO: ${{ secrets.GITHUB_REPOSITORY }}
+  HF_MODEL_REPO: ${{ github.repository }}
   MODEL_FILENAME: model.joblib
-  
+  PYTHON_VERSION: '3.9'
+
 jobs:
+  # --- JOB 1: Entraînement et Déploiement ---
   deploy:
     name: Train and Deploy Model
-    runs-on: ubuntu-latest # Utilise une machine virtuelle Linux à jour
+    runs-on: ubuntu-latest
     
     steps:
-      # Étape 1: Récupérer le code du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
-        # On récupère l'historique complet pour que LFS fonctionne correctement
         with:
-          fetch-depth: 0 
+          # Nécessaire pour que Git LFS fonctionne correctement s'il est utilisé
+          fetch-depth: 0
 
-      # Étape 3: Mettre en place l'environnement Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9' # Spécifier une version pour la reproductibilité
+          python-version: ${{ env.PYTHON_VERSION }}
           
-      # Étape 4: Installer les dépendances
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Étape 5: Entraîner le modèle
-      # Cette étape génère l'artefact (le modèle) qui sera déployé.
       - name: Train model
         run: python model.py --action train
-        
+      
       - name: Push to Hugging Face Hub
         env:
+          # Le token est passé en variable d'environnement uniquement pour cette étape
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -c "
           from huggingface_hub import HfApi
           import os
 
-          # Récupérer les variables d'environnement
+          # Le script peut maintenant lire correctement les variables
           repo_id = os.getenv('HF_MODEL_REPO')
           model_filename = os.getenv('MODEL_FILENAME')
           
@@ -57,59 +56,50 @@ jobs:
           print(f'Fichier modèle à pousser : {model_filename}')
 
           api = HfApi()
-          
-          # --- CORRECTION ICI ---
-          # On utilise la concaténation de chaînes au lieu d'une f-string complexe
-          # pour éviter les conflits de guillemets.
-          model_path_in_repo = model_filename
-          readme_path_in_repo = 'README.md'
 
-          # Push du fichier de modèle
           api.upload_file(
-              path_or_fileobj='./' + model_filename,
-              path_in_repo=model_path_in_repo,
+              path_or_fileobj=f'./{model_filename}',
+              path_in_repo=model_filename,
               repo_id=repo_id,
               repo_type='model'
           )
           
-          # Push du README
           api.upload_file(
               path_or_fileobj='./README.md',
-              path_in_repo=readme_path_in_repo,
+              path_in_repo='README.md',
               repo_id=repo_id,
               repo_type='model'
           )
           
           print('Fichiers poussés avec succès sur le Hub !')
           "
-          notify_on_success:
+  notify_on_success:
+    name: Send Success Notification
+    runs-on: ubuntu-latest
+    needs: deploy
     
+    steps:
       - name: Send deployment success email
         uses: dawidd6/action-send-mail@v3
         with:
-          # Paramètres du serveur
           server_address: ${{ secrets.MAIL_SERVER_ADDRESS }}
           server_port: ${{ secrets.MAIL_SERVER_PORT }}
-          
-          # Authentification
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
 
-          # Contenu de l'email
-          subject: 'Succès du Déploiement : ${{ github.repository }}'
-          to: ${{ secrets.MAIL_USERNAME }} # Envoyer à soi-même ou à une liste
-          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}> # Nom de l'expéditeur
+          subject: 'Succès du Déploiement : ${{ env.HF_MODEL_REPO }}'
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
           body: |
             Bonjour,
 
-            Le déploiement du modèle sur le dépôt ${{ github.repository }} a réussi.
+            Le déploiement du modèle sur le dépôt ${{ env.HF_MODEL_REPO }} a réussi.
             
             Commit : ${{ github.sha }}
             Auteur : ${{ github.actor }}
             
             Le modèle est maintenant disponible sur Hugging Face Hub :
-            https://huggingface.co/${{ github.repository }}
+            https://huggingface.co/${{ env.HF_MODEL_REPO }}
 
             Cordialement,
             Votre Pipeline CI/CD.
-
