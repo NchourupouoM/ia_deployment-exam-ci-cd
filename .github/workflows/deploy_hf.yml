@@ -9,7 +9,7 @@ on:
 
 # Variables d'environnement globales, accessibles à tous les jobs
 env:
-  HF_MODEL_REPO: ${{ github.repository }}
+  HF_MODEL_REPO: https://huggingface.co/NchourupouoM/ia-deployment-exam-ci-cd
   MODEL_FILENAME: model.joblib
   PYTHON_VERSION: '3.9'
 
