@@ -23,7 +23,7 @@ jobs:
         # On récupère l'historique complet pour que LFS fonctionne correctement
         with:
           fetch-depth: 0 
-          
+
       # Étape 3: Mettre en place l'environnement Python
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -41,34 +41,42 @@ jobs:
       - name: Train model
         run: python model.py --action train
         
-      # Étape 6: Pousser le modèle vers Hugging Face Hub
-      # L'approche la plus moderne et robuste est d'utiliser la bibliothèque Python `huggingface_hub`.
       - name: Push to Hugging Face Hub
         env:
-          # Le token est passé en variable d'environnement pour cette étape
           HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -c "
-          from huggingface_hub import HfApi, HfFolder
+          from huggingface_hub import HfApi
+          import os
+
+          # Récupérer les variables d'environnement
+          repo_id = os.getenv('HF_MODEL_REPO')
+          model_filename = os.getenv('MODEL_FILENAME')
           
-          # Authentification (plus nécessaire si le token est dans l'env)
-          # HfFolder.save_token('${{ secrets.HF_TOKEN }}')
-          
+          print(f'Déploiement sur le dépôt : {repo_id}')
+          print(f'Fichier modèle à pousser : {model_filename}')
+
           api = HfApi()
           
+          # --- CORRECTION ICI ---
+          # On utilise la concaténation de chaînes au lieu d'une f-string complexe
+          # pour éviter les conflits de guillemets.
+          model_path_in_repo = model_filename
+          readme_path_in_repo = 'README.md'
+
           # Push du fichier de modèle
           api.upload_file(
-              path_or_fileobj=f'./{_env['MODEL_FILENAME']}',
-              path_in_repo=f'{_env['MODEL_FILENAME']}',
-              repo_id=_env['HF_MODEL_REPO'],
+              path_or_fileobj='./' + model_filename,
+              path_in_repo=model_path_in_repo,
+              repo_id=repo_id,
               repo_type='model'
           )
           
           # Push du README
           api.upload_file(
               path_or_fileobj='./README.md',
-              path_in_repo='README.md',
-              repo_id=_env['HF_MODEL_REPO'],
+              path_in_repo=readme_path_in_repo,
+              repo_id=repo_id,
               repo_type='model'
           )
           
